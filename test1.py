@@ -2,14 +2,14 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-# Define a more complex CNN architecture
+
 class ComplexCNN(nn.Module):
     def __init__(self):
         super(ComplexCNN, self).__init__()
-        self.conv1 = nn.Conv2d(in_channels=1, out_channels=64, kernel_size=3, stride=1, padding=1)  # Increased output channels
-        self.conv2 = nn.Conv2d(in_channels=64, out_channels=128, kernel_size=3, stride=1, padding=1)  # Added another layer
-        self.conv3 = nn.Conv2d(in_channels=128, out_channels=256, kernel_size=3, stride=1, padding=1)  # Another layer
-        self.fc1 = nn.Linear(256 * 3 * 3, 10)  # Adjusted based on output size after pooling
+        self.conv1 = nn.Conv2d(in_channels=1, out_channels=64, kernel_size=3, stride=1, padding=1)
+        self.conv2 = nn.Conv2d(in_channels=64, out_channels=128, kernel_size=3, stride=1, padding=1) 
+        self.conv3 = nn.Conv2d(in_channels=128, out_channels=256, kernel_size=3, stride=1, padding=1)
+        self.fc1 = nn.Linear(256 * 3 * 3, 10)
 
     def forward(self, x):
         x = F.relu(self.conv1(x))
@@ -24,7 +24,7 @@ class ComplexCNN(nn.Module):
 
 # Function to apply HT2 Decomposition
 def apply_ht2_decomposition(layer, energy_threshold=0.5):
-    from ht2 import ht2  # Ensure to import your HT2 implementation
+    from ht2 import ht2
     decomposed_layer = ht2(layer, energy_threshold)
     return decomposed_layer
 

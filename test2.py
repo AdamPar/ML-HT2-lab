@@ -16,7 +16,7 @@ class SimpleCNN(nn.Module):
         return x
 
 def apply_ht2_decomposition(layer, energy_threshold=0.70):
-    from ht2 import ht2  # Make sure to import your HT2 implementation
+    from ht2 import ht2  
 
     # Apply HT2 to the convolutional layer
     decomposed_layer = ht2(layer, energy_threshold)
