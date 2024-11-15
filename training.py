@@ -260,7 +260,7 @@ def main():
     test_loader = DataLoader(test_dataset, batch_size=128, 
                            shuffle=False, num_workers=2)
     
-     # 1. Train initial model
+    # 1. Train initial model
     model = SimpleConvNet().to(device)
     initial_stats = get_model_stats(model)
     model, initial_metrics = train_model(model, train_loader, test_loader, epochs=10, 
@@ -280,6 +280,13 @@ def main():
     decomposed_model = decomposed_model.to(device)
     decomposed_stats = get_model_stats(decomposed_model)
     
+    # Calculate compression ratios
+    flops_compression_ratio = initial_stats['flops'] / decomposed_stats['flops']
+    params_compression_ratio = initial_stats['parameters'] / decomposed_stats['parameters']
+    
+    print(f"FLOPs Compression Ratio: {flops_compression_ratio:.2f}x")
+    print(f"Parameters Compression Ratio: {params_compression_ratio:.2f}x")
+    
     # 3. Train decomposed model
     decomposed_model, decomposed_metrics = train_model(
         decomposed_model, train_loader, test_loader, 
@@ -293,12 +300,23 @@ def main():
         is_finetuning=True
     )
     
-    # Save final finetuned results
+    # Calculate accuracy deltas
+    delta_acc_top1 = finetuned_metrics['test_acc_top1'][-1] - initial_results['accuracy_top1']
+    delta_acc_top5 = finetuned_metrics['test_acc_top5'][-1] - initial_results['accuracy_top5']
+    
+    print(f"Top-1 Accuracy Delta: {delta_acc_top1:.2f}%")
+    print(f"Top-5 Accuracy Delta: {delta_acc_top5:.2f}%")
+    
+    # Save final finetuned results with compression ratios and accuracy deltas
     final_results = {
         'accuracy_top1': finetuned_metrics['test_acc_top1'][-1],
         'accuracy_top5': finetuned_metrics['test_acc_top5'][-1],
         'parameters': decomposed_stats['parameters'],
-        'flops': decomposed_stats['flops']
+        'flops': decomposed_stats['flops'],
+        'flops_compression_ratio': float(flops_compression_ratio),
+        'params_compression_ratio': float(params_compression_ratio),
+        'delta_accuracy_top1': float(delta_acc_top1),
+        'delta_accuracy_top5': float(delta_acc_top5)
     }
     save_metrics(final_results, f'{save_path}/finetuned_model_results.json')
 
