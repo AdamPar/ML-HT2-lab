@@ -260,7 +260,7 @@ def main():
     test_loader = DataLoader(test_dataset, batch_size=128, 
                            shuffle=False, num_workers=2)
     
-    # 1. Train initial model
+     # 1. Train initial model
     model = SimpleConvNet().to(device)
     initial_stats = get_model_stats(model)
     model, initial_metrics = train_model(model, train_loader, test_loader, epochs=10, 
@@ -280,7 +280,13 @@ def main():
     decomposed_model = decomposed_model.to(device)
     decomposed_stats = get_model_stats(decomposed_model)
     
-    # 3. Fine-tune the decomposed model
+    # 3. Train decomposed model
+    decomposed_model, decomposed_metrics = train_model(
+        decomposed_model, train_loader, test_loader, 
+        epochs=10, device=device, save_path=save_path
+    )
+    
+    # 4. Fine-tune the decomposed model
     decomposed_model, finetuned_metrics = train_model(
         decomposed_model, train_loader, test_loader, 
         epochs=5, device=device, save_path=save_path, 
