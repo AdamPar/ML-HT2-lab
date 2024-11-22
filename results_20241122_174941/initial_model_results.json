@@ -1,0 +1,6 @@
+{
+    "accuracy_top1": 48.64,
+    "accuracy_top5": 77.3,
+    "parameters": 396516,
+    "flops": 79087616
+}

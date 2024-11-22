@@ -11,6 +11,9 @@ import numpy as np
 from datetime import datetime
 from ht2_implementation import ht2
 
+# set to either "cuda", "mps" or "cpu"
+device = torch.device("mps" if torch.mps.is_available() else "cpu")
+
 class SimpleConvNet(nn.Module):
     def __init__(self):
         super(SimpleConvNet, self).__init__()
@@ -263,7 +266,7 @@ def main():
     # 1. Train initial model
     model = SimpleConvNet().to(device)
     initial_stats = get_model_stats(model)
-    model, initial_metrics = train_model(model, train_loader, test_loader, epochs=10, 
+    model, initial_metrics = train_model(model, train_loader, test_loader, epochs=30, 
                                        device=device, save_path=save_path)
     
     # Save initial model results
@@ -290,7 +293,7 @@ def main():
     # 3. Train decomposed model
     decomposed_model, decomposed_metrics = train_model(
         decomposed_model, train_loader, test_loader, 
-        epochs=10, device=device, save_path=save_path
+        epochs=30, device=device, save_path=save_path
     )
     
     # 4. Fine-tune the decomposed model

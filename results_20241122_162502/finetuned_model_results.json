@@ -1,0 +1,10 @@
+{
+    "accuracy_top1": 49.97,
+    "accuracy_top5": 78.60000000000001,
+    "parameters": 177642,
+    "flops": 33572864,
+    "flops_compression_ratio": 2.3557006039163055,
+    "params_compression_ratio": 2.232107271928936,
+    "delta_accuracy_top1": 4.710000000000001,
+    "delta_accuracy_top5": 3.970000000000013
+}
