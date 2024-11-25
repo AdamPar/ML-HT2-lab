@@ -3,3 +3,4 @@ torchvision
 tensorly
 numpy
 tqdm
+matplotlib
