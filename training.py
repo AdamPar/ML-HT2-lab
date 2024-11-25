@@ -9,10 +9,8 @@ import json
 import os
 import numpy as np
 from datetime import datetime
+import matplotlib.pyplot as plt
 from ht2_implementation import ht2
-
-# set to either "cuda", "mps" or "cpu"
-device = torch.device("mps" if torch.mps.is_available() else "cpu")
 
 class SimpleConvNet(nn.Module):
     def __init__(self):
@@ -64,6 +62,21 @@ class DecomposedConvNet(nn.Module):
             x = layer(x)
         x = self.classifier(x)
         return x
+
+def plot_training_curves(metrics, save_path, title_prefix=""):
+    plt.figure(figsize=(8, 5))
+    plt.plot(metrics['train_acc_top1'], label='Train')
+    plt.plot(metrics['test_acc_top1'], label='Validation')
+    plt.title(f'{title_prefix}Accuracy')
+    plt.xlabel('Epoch')
+    plt.ylabel('Accuracy (%)')
+    plt.legend()
+    plt.grid(True)
+    
+    plt.tight_layout()
+    plot_filename = f'{title_prefix.lower().replace(" ", "_")}training_curves.png'
+    plt.savefig(os.path.join(save_path, plot_filename))
+    plt.close()
 
 def save_metrics(metrics, filename):
     with open(filename, 'w') as f:
@@ -135,15 +148,14 @@ def get_model_stats(model, input_size=(1, 3, 32, 32)):
         'flops': count_flops(model, input_size)
     }
 
-def evaluate_model(model, test_loader, device):
+def evaluate_model(model, data_loader, device):
     model.eval()
     correct_1 = 0
     correct_5 = 0
     total = 0
     
     with torch.no_grad():
-        test_pbar = tqdm(test_loader, desc='Testing')
-        for images, labels in test_pbar:
+        for images, labels in data_loader:
             images, labels = images.to(device), labels.to(device)
             outputs = model(images)
             
@@ -155,11 +167,6 @@ def evaluate_model(model, test_loader, device):
             correct_5 += top5_pred.eq(labels.view(1, -1).expand_as(top5_pred)).sum().item()
             
             total += labels.size(0)
-            
-            test_pbar.set_postfix({
-                'Top-1': f'{100.*correct_1/total:.2f}%',
-                'Top-5': f'{100.*correct_5/total:.2f}%'
-            })
     
     return correct_1/total * 100, correct_5/total * 100
 
@@ -169,6 +176,8 @@ def train_model(model, train_loader, test_loader, epochs, device, save_path, is_
     
     metrics = {
         'train_losses': [],
+        'train_acc_top1': [],
+        'train_acc_top5': [],
         'test_acc_top1': [],
         'test_acc_top5': []
     }
@@ -176,6 +185,9 @@ def train_model(model, train_loader, test_loader, epochs, device, save_path, is_
     for epoch in range(epochs):
         model.train()
         running_loss = 0.0
+        train_correct_1 = 0
+        train_correct_5 = 0
+        train_total = 0
         
         train_pbar = tqdm(train_loader, 
                          desc=f'{"Fine-tuning" if is_finetuning else "Training"} Epoch {epoch+1}/{epochs}')
@@ -189,15 +201,42 @@ def train_model(model, train_loader, test_loader, epochs, device, save_path, is_
             loss.backward()
             optimizer.step()
             
+            # Calculate training accuracy
+            _, predicted = outputs.max(1)
+            train_correct_1 += predicted.eq(labels).sum().item()
+            
+            _, top5_pred = outputs.topk(5, 1, True, True)
+            top5_pred = top5_pred.t()
+            train_correct_5 += top5_pred.eq(labels.view(1, -1).expand_as(top5_pred)).sum().item()
+            
+            train_total += labels.size(0)
             running_loss += loss.item()
-            train_pbar.set_postfix({'loss': f'{loss.item():.4f}'})
+            
+            train_pbar.set_postfix({
+                'loss': f'{loss.item():.4f}',
+                'acc': f'{100.*train_correct_1/train_total:.2f}%'
+            })
         
+        # Calculate epoch metrics
         epoch_loss = running_loss / len(train_loader)
-        acc_top1, acc_top5 = evaluate_model(model, test_loader, device)
+        train_acc_top1 = 100. * train_correct_1 / train_total
+        train_acc_top5 = 100. * train_correct_5 / train_total
+        test_acc_top1, test_acc_top5 = evaluate_model(model, test_loader, device)
         
+        # Store metrics
         metrics['train_losses'].append(epoch_loss)
-        metrics['test_acc_top1'].append(acc_top1)
-        metrics['test_acc_top5'].append(acc_top5)
+        metrics['train_acc_top1'].append(train_acc_top1)
+        metrics['train_acc_top5'].append(train_acc_top5)
+        metrics['test_acc_top1'].append(test_acc_top1)
+        metrics['test_acc_top5'].append(test_acc_top5)
+        
+        # Plot current progress
+        if (epoch + 1) % 5 == 0 or epoch == epochs - 1:
+            plot_training_curves(
+                metrics, 
+                save_path, 
+                "Fine-tuning " if is_finetuning else "Initial Training "
+            )
     
     return model, metrics
 
@@ -241,7 +280,7 @@ def apply_ht2_to_model(model, energy_threshold=0.95):
     return new_model
 
 def main():
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device = torch.device("cpu")
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
     save_path = f'results_{timestamp}'
     os.makedirs(save_path, exist_ok=True)
@@ -269,26 +308,20 @@ def main():
     model, initial_metrics = train_model(model, train_loader, test_loader, epochs=30, 
                                        device=device, save_path=save_path)
     
-    # Save initial model results
+    # Save initial model results and plot final curves
+    plot_training_curves(initial_metrics, save_path, "Initial Model ")
+    
     initial_results = {
         'accuracy_top1': initial_metrics['test_acc_top1'][-1],
         'accuracy_top5': initial_metrics['test_acc_top5'][-1],
         'parameters': initial_stats['parameters'],
         'flops': initial_stats['flops']
     }
-    save_metrics(initial_results, f'{save_path}/initial_model_results.json')
     
     # 2. Apply HT2 decomposition and get new model
     decomposed_model = apply_ht2_to_model(model)
     decomposed_model = decomposed_model.to(device)
     decomposed_stats = get_model_stats(decomposed_model)
-    
-    # Calculate compression ratios
-    flops_compression_ratio = initial_stats['flops'] / decomposed_stats['flops']
-    params_compression_ratio = initial_stats['parameters'] / decomposed_stats['parameters']
-    
-    print(f"FLOPs Compression Ratio: {flops_compression_ratio:.2f}x")
-    print(f"Parameters Compression Ratio: {params_compression_ratio:.2f}x")
     
     # 3. Train decomposed model
     decomposed_model, decomposed_metrics = train_model(
@@ -302,13 +335,14 @@ def main():
         epochs=5, device=device, save_path=save_path, 
         is_finetuning=True
     )
+    plot_training_curves(finetuned_metrics, save_path, "Fine-tuned Model ")
     
+    # Calculate compression ratios
+    flops_compression_ratio = initial_stats['flops'] / decomposed_stats['flops']
+    params_compression_ratio = initial_stats['parameters'] / decomposed_stats['parameters']
     # Calculate accuracy deltas
     delta_acc_top1 = finetuned_metrics['test_acc_top1'][-1] - initial_results['accuracy_top1']
     delta_acc_top5 = finetuned_metrics['test_acc_top5'][-1] - initial_results['accuracy_top5']
-    
-    print(f"Top-1 Accuracy Delta: {delta_acc_top1:.2f}%")
-    print(f"Top-5 Accuracy Delta: {delta_acc_top5:.2f}%")
     
     # Save final finetuned results with compression ratios and accuracy deltas
     final_results = {
@@ -321,7 +355,7 @@ def main():
         'delta_accuracy_top1': float(delta_acc_top1),
         'delta_accuracy_top5': float(delta_acc_top5)
     }
-    save_metrics(final_results, f'{save_path}/finetuned_model_results.json')
+    save_metrics(final_results, f'{save_path}/results.json')
 
 if __name__ == "__main__":
     main()
